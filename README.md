@@ -24,5 +24,19 @@ prompt_tokens = ruler.count_prompt_tokens(
     user_content="Explain quantum gravity."
 )
 
-print(f"Prompt Tokens: {prompt_tokens}")
+
+## Offline Usage
+
+For air-gapped or offline environments, you must first download the tokenizer assets to a local directory:
+
+```bash
+# using the included helper script
+python3 scripts/snapshot_tokenizer.py --output ./my_local_model
 ```
+
+Then initialize the Ruler with the local path:
+
+```python
+ruler = Ruler(model_name="./my_local_model")
+```
+

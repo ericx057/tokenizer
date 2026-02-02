@@ -19,7 +19,7 @@ class TokenizerMismatchError(Exception):
 
 class Ruler:
     """
-    Handles strict tokenization aligned with Llama 3.1.
+    Handles strict tokenization aligned with Llama 3.1. 
 
     All chunking logic operates on token IDs, never on string length.
     Uses the tokenizer's native chat template for accurate token counting.
