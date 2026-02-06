@@ -48,3 +48,45 @@ def test_count_prompt_tokens(mock_tokenizer):
     
     count = ruler.count_prompt_tokens("sys", "user")
     assert count == 4
+
+
+def test_ruler_custom_context_length():
+    """Verify max_context_length configures tokenizer and exposes via property."""
+    with patch("tokenizer.ruler.AutoTokenizer") as mock_auto:
+        mock_instance = MagicMock()
+        mock_instance.vocab_size = 128256
+        mock_instance.model_max_length = 6000  # Simulates the override
+        mock_auto.from_pretrained.return_value = mock_instance
+        
+        ruler = Ruler(max_context_length=6000)
+        
+        # Verify from_pretrained was called with model_max_length
+        mock_auto.from_pretrained.assert_called_once_with(
+            "meta-llama/Llama-3.1-8B-Instruct",
+            model_max_length=6000
+        )
+        
+        # Verify context_length property returns the configured value
+        assert ruler.context_length == 6000
+
+
+def test_ruler_context_length_validation():
+    """Verify max_context_length rejects invalid values before loading tokenizer."""
+    import pytest
+    
+    # Test non-integer
+    with pytest.raises(ValueError, match="must be an integer"):
+        Ruler(max_context_length=6000.5)
+    
+    # Test boolean (bool is a subclass of int in Python, must reject explicitly)
+    with pytest.raises(ValueError, match="must be an integer"):
+        Ruler(max_context_length=True)
+    
+    # Test zero
+    with pytest.raises(ValueError, match="must be positive"):
+        Ruler(max_context_length=0)
+    
+    # Test negative
+    with pytest.raises(ValueError, match="must be positive"):
+        Ruler(max_context_length=-100)
+

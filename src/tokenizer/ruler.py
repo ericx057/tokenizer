@@ -7,7 +7,7 @@ Includes LRU caching to reduce redundant tokenization.
 """
 
 from functools import lru_cache
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from transformers import AutoTokenizer
 
 
@@ -34,18 +34,45 @@ class Ruler:
         For typical chunks of ~4KB, worst case ~3MB memory per instance.
     """
 
-    def __init__(self, model_name: str = "meta-llama/Llama-3.1-8B-Instruct", expected_vocab_size: int = 128256):
+    def __init__(
+        self,
+        model_name: str = "meta-llama/Llama-3.1-8B-Instruct",
+        expected_vocab_size: int = 128256,
+        max_context_length: Optional[int] = None,
+    ):
         """
         Initialize the Ruler with a Llama 3.1 compatible tokenizer.
 
         Args:
             model_name: HuggingFace model identifier for tokenizer.
             expected_vocab_size: Expected vocab size (128256 for Llama 3.1).
+            max_context_length: Override for model's context window size.
+                If None, uses the model's default from config.
+                Useful for fine-tuned models with custom context lengths.
+                Must be a positive integer if provided.
 
         Raises:
             TokenizerMismatchError: If vocab_size does not match expected.
+            ValueError: If max_context_length is not a positive integer.
         """
-        self._tokenizer = AutoTokenizer.from_pretrained(model_name)
+        # Validate max_context_length before loading tokenizer (fail fast)
+        if max_context_length is not None:
+            # Note: bool is a subclass of int in Python, so we must check for bool first
+            if isinstance(max_context_length, bool) or not isinstance(max_context_length, int):
+                raise ValueError(
+                    f"max_context_length must be an integer, got {type(max_context_length).__name__}"
+                )
+            if max_context_length <= 0:
+                raise ValueError(
+                    f"max_context_length must be positive, got {max_context_length}"
+                )
+
+        # Build tokenizer kwargs conditionally to avoid passing None
+        tokenizer_kwargs: Dict[str, Any] = {}
+        if max_context_length is not None:
+            tokenizer_kwargs["model_max_length"] = max_context_length
+
+        self._tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
         actual_vocab_size = self._tokenizer.vocab_size
 
         if actual_vocab_size != expected_vocab_size:
@@ -207,3 +234,17 @@ class Ruler:
     def vocab_size(self) -> int:
         """Return the tokenizer's vocabulary size."""
         return self._tokenizer.vocab_size
+
+    @property
+    def context_length(self) -> int:
+        """Return the tokenizer's maximum context length.
+        
+        This reflects the configured context window size:
+        - If max_context_length was provided at init, returns that value
+        - Otherwise, returns the model's default from config
+        
+        Note: Some tokenizers may return very large default values (e.g., 10^30)
+        if no explicit limit is set in the model config. Always verify this
+        value is sensible for your use case.
+        """
+        return self._tokenizer.model_max_length
